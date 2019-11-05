@@ -40,12 +40,14 @@
   "license": "MIT",
   "dependencies": {
     "backtesting": "^1.0.0-alpha.0",
+    "event-stream": "^4.0.1",
     "mongodb": "^3.3.2",
     "odata-v4-mongodb": "^0.1.12",
     "odata-v4-server": "^0.2.13",
     "patch-package": "^6.1.2"
   },
   "devDependencies": {
+    "@types/event-stream": "^3.3.34",
     "@types/express": "^4.17.2",
     "@types/mongodb": "^3.3.1",
     "@types/node": "^12.7.4",

@@ -1,7 +1,9 @@
 import { streamTrades } from "backtesting";
+import es from "event-stream";
 import { ObjectID } from "mongodb";
 import { Edm, odata } from "odata-v4-server";
 import connect from "../connect";
+import { Trade } from "./Trade";
 
 const collectionName = "backtest";
 
@@ -45,6 +47,9 @@ export class Backtest {
   @Edm.Double
   public profit: number;
 
+  @Edm.Collection(Edm.EntityType(Edm.ForwardRef(() => Trade)))
+  public Trades: Trade[];
+
   constructor(data: any) {
     Object.assign(this, data);
   }
@@ -66,8 +71,8 @@ export class Backtest {
       begin,
       end,
       indicators,
-      initialBalance,
-      code
+      code,
+      initialBalance
     } = backtest;
 
     const rs = streamTrades({
@@ -82,21 +87,32 @@ export class Backtest {
       initialBalance
     });
 
-    const trades: Array<{ amount: number }> = [];
-    rs.on("data", chunk => trades.push(JSON.parse(chunk)));
+    let finalBalance: number;
+    const tradesCollection = await db.collection("trade");
+    await tradesCollection.deleteMany({ parentId: _id });
 
-    return new Promise(resolve => {
+    rs.pipe(
+      es.map((chunk: any, next: any) => {
+        const doc: { amount: number; parentId?: ObjectID } = JSON.parse(chunk);
+        doc.parentId = _id;
+        finalBalance = doc.amount;
+        tradesCollection.insertOne(doc, next);
+      })
+    );
+
+    await new Promise(resolve => {
       rs.on("end", resolve);
-    })
-      .then(() =>
-        db.collection(collectionName).updateOne(
-          { _id },
-          {
-            $set: {
-              finalBalance: Math.abs(trades[trades.length - 1].amount)
-            }
+    });
+
+    return db
+      .collection(collectionName)
+      .updateOne(
+        { _id },
+        {
+          $set: {
+            finalBalance: Math.abs(finalBalance)
           }
-        )
+        }
       )
       .then(r => r.modifiedCount);
   }

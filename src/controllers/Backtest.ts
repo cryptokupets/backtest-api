@@ -3,6 +3,7 @@ import { createQuery } from "odata-v4-mongodb";
 import { Edm, odata, ODataController, ODataQuery } from "odata-v4-server";
 import connect from "../connect";
 import { Backtest } from "../models/Backtest";
+import { Trade } from "../models/Trade";
 
 const collectionName = "backtest";
 
@@ -91,5 +92,33 @@ export class BacktestController extends ODataController {
       .collection(collectionName)
       .deleteOne({ _id })
       .then(result => result.deletedCount);
+  }
+
+  @odata.GET("Trades")
+  public async getTrades(
+    @odata.result result: Backtest,
+    @odata.query query: ODataQuery
+  ): Promise<Trade[]> {
+    const db = await connect();
+    const collection = db.collection("trade");
+    const mongodbQuery = createQuery(query);
+    const parentId = new ObjectID(result._id);
+    const trades: any =
+      typeof mongodbQuery.limit === "number" && mongodbQuery.limit === 0
+        ? []
+        : await collection
+            .find({ $and: [{ parentId }, mongodbQuery.query] })
+            .project(mongodbQuery.projection)
+            .skip(mongodbQuery.skip || 0)
+            .limit(mongodbQuery.limit || 0)
+            .sort(mongodbQuery.sort)
+            .toArray();
+    if (mongodbQuery.inlinecount) {
+      trades.inlinecount = await collection
+        .find({ $and: [{ parentId }, mongodbQuery.query] })
+        .project(mongodbQuery.projection)
+        .count(false);
+    }
+    return trades;
   }
 }
